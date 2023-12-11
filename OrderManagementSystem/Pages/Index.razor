@@ -1,0 +1,236 @@
+﻿@page "/"
+@inherits LayoutComponentBase
+@using OrderManagementSystem.Services
+@using OrderManagementSystem.Models
+@inject OrderService OrderService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+@using Microsoft.AspNetCore.Components.Forms
+<link rel="stylesheet" href="css/bootstrap.css" />
+
+<h3 class="mt-3">Order Management System</h3>
+
+<EditForm Model="this" Context="orderSearchForm">
+    <table class="table table-bordered">
+        <thead class="thead-dark">
+            <tr>
+                <th>
+                    <label for="orderNumberSearch">Order Number:</label>
+                    <InputText id="orderNumberSearch" @bind-Value="orderNumberSearchTerm" class="form-control" />
+                </th>
+                <th>
+                    <label for="orderTypeSearch">Order Type:</label>
+                    <InputText id="orderTypeSearch" @bind-Value="orderTypeSearchTerm" class="form-control" />
+                </th>
+                <th>
+                    <label for="fromDateSearch">From Date:</label>
+                    <InputDate id="fromDateSearch" @bind-Value="fromDateSearchTerm" class="form-control" />
+                </th>
+                <th>
+                    <label for="toDateSearch">To Date:</label>
+                    <InputDate id="toDateSearch" @bind-Value="toDateSearchTerm" class="form-control" />
+                </th>
+                <th colspan="2"></th> <!-- Colspan to align with other columns -->
+                <th>
+                    <button type="button" class="btn btn-secondary" @onclick="SearchOrders">Search</button>
+                </th>
+                <th>
+                    <button type="button" class="btn btn-secondary" @onclick="ClearSearch">Clear</button>
+                </th>
+            </tr>
+
+            <!-- Header row -->
+            <tr>
+                <th>Order Number</th>
+                <th>Order Type</th>
+                <th>Order Status</th>
+                <th>Customer Name</th>
+                <th>Create Date</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var order in filteredOrders ?? Enumerable.Empty<OrderHeader>())
+            {
+                <tr>
+                    <td>@order.OrderNumber</td>
+                    <td>@order.OrderType</td>
+                    <td>@order.OrderStatus</td>
+                    <td>@order.CustomerName</td>
+                    <td>@order.CreateDate</td>
+                    <td>
+                        <button @onclick="() => ToggleOrderLines(order)" class="btn btn-info btn-sm">Toggle Order Lines</button>
+                        <button @onclick="() => EditOrder(order)" class="btn btn-warning btn-sm">Edit</button>
+                        <button @onclick="() => DeleteOrder(order)" class="btn btn-danger btn-sm">Delete</button>
+                    </td>
+                </tr>
+                @if (order.ShowOrderLines)
+                {
+                    <tr>
+                        <td colspan="6">
+                            <!-- Ensure that this is within the context of an EditForm -->
+                            <EditForm Model="order" Context="orderLinesForm">
+                                <!-- Order Line Grid -->
+                                <table class="table table-bordered">
+                                    <thead class="thead-dark">
+                                        <tr>
+                                            <th>Line Number</th>
+                                            <th>
+                                                <label for="productCodeSearch">Product Code:</label>
+                                                <InputText id="productCodeSearch" @bind-Value="productCodeSearchTerm" class="form-control" />
+                                            </th>
+                                            <th>Product Type</th>
+                                            <th>Product Cost Price</th>
+                                            <th>Product Sales Price</th>
+                                            <th>Quantity</th>
+                                            <th>Action</th>
+                                            <th>
+                                                <button type="button" class="btn btn-secondary" @onclick="() => SearchOrderLines(order)">Search</button>
+                                            </th>
+                                            <th>
+                                                <button type="button" class="btn btn-secondary" @onclick="() => ClearProductCodeSearch(order)">Clear</button>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var orderLine in filteredOrderLines ?? Enumerable.Empty<OrderLine>())
+                                        {
+                                            <tr>
+                                                <td>@orderLine.LineNumber</td>
+                                                <td>
+                                                    <EditForm Model="orderLine" Context="productCodeForm">
+                                                        <InputText @bind-Value="@orderLine.ProductCode" class="form-control" />
+                                                    </EditForm>
+                                                </td>
+                                                <td>
+                                                    <EditForm Model="orderLine" Context="productTypeForm">
+                                                        <select @bind="@orderLine.ProductType" class="form-control">
+                                                            <option value="Apparel">Apparel</option>
+                                                            <option value="Parts">Parts</option>
+                                                            <option value="Equipment">Equipment</option>
+                                                            <option value="Motor">Motor</option>
+                                                        </select>
+                                                    </EditForm>
+                                                </td>
+                                                <td>
+                                                    <EditForm Model="orderLine" Context="costPriceForm">
+                                                        <InputNumber @bind-Value="@orderLine.CostPrice" class="form-control" />
+                                                    </EditForm>
+                                                </td>
+                                                <td>
+                                                    <EditForm Model="orderLine" Context="salesPriceForm">
+                                                        <InputNumber @bind-Value="@orderLine.SalesPrice" class="form-control" />
+                                                    </EditForm>
+                                                </td>
+                                                <td>
+                                                    <EditForm Model="orderLine" Context="quantityForm">
+                                                        <InputNumber @bind-Value="@orderLine.Quantity" class="form-control" />
+                                                    </EditForm>
+                                                </td>
+                                                <td>
+                                                    <button @onclick="() => EditOrderLine(orderLine)" class="btn btn-warning btn-sm">Edit</button>
+                                                    <button @onclick="() => DeleteOrderLine(order, orderLine)" class="btn btn-danger btn-sm">Delete</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </EditForm>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</EditForm>
+
+<a href="/createorder" class="btn btn-success mt-3">Add New Order</a>
+
+@code {
+    private List<OrderHeader>? orders;
+    private List<OrderHeader>? filteredOrders;
+    private List<OrderLine>? filteredOrderLines;
+    private string orderNumberSearchTerm = "";
+    private string orderTypeSearchTerm = "";
+    private DateTime? fromDateSearchTerm;
+    private DateTime? toDateSearchTerm;
+    private string productCodeSearchTerm = "";
+
+    protected override void OnInitialized()
+    {
+        orders = OrderService.GetOrderHeaders() ?? new List<OrderHeader>();
+        filteredOrders = orders;
+    }
+
+    private async Task DeleteOrder(OrderHeader order)
+    {
+        var confirmDelete = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete Order {order.OrderNumber}?");
+        if (confirmDelete)
+        {
+            OrderService.DeleteOrderHeader(order.Id);
+            filteredOrders = OrderService.GetOrderHeaders();
+        }
+    }
+
+    private async Task DeleteOrderLine(OrderHeader order, OrderLine orderLine)
+    {
+        var confirmDelete = await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete Order Line {orderLine.LineNumber} for Order {order.OrderNumber}?");
+        if (confirmDelete)
+        {
+            OrderService.DeleteOrderLine(order.Id, orderLine.Id);
+            filteredOrders = OrderService.GetOrderHeaders();
+        }
+    }
+
+    private void ToggleOrderLines(OrderHeader order)
+    {
+        order.ShowOrderLines = !order.ShowOrderLines;
+        if (order.ShowOrderLines)
+        {
+            SearchOrderLines(order);
+        }
+    }
+
+    private void EditOrder(OrderHeader order)
+    {
+        NavigationManager.NavigateTo($"/createorder/{order.Id}");
+    }
+
+    private void EditOrderLine(OrderLine orderLine)
+    {
+        NavigationManager.NavigateTo($"/createorder/{orderLine.OrderHeaderId}#{orderLine.Id}");
+    }
+
+    private void SearchOrders()
+    {
+        filteredOrders = orders?
+            .Where(o =>
+                (string.IsNullOrEmpty(orderNumberSearchTerm) || o?.OrderNumber?.Contains(orderNumberSearchTerm, StringComparison.OrdinalIgnoreCase) == true) &&
+                (string.IsNullOrEmpty(orderTypeSearchTerm) || o?.OrderType?.Contains(orderTypeSearchTerm, StringComparison.OrdinalIgnoreCase) == true) &&
+                (!fromDateSearchTerm.HasValue || o?.CreateDate >= fromDateSearchTerm) &&
+                (!toDateSearchTerm.HasValue || o?.CreateDate <= toDateSearchTerm))
+            .ToList() ?? new List<OrderHeader>();
+    }
+
+    private void ClearSearch()
+    {
+        orderNumberSearchTerm = "";
+        orderTypeSearchTerm = "";
+        fromDateSearchTerm = null;
+        toDateSearchTerm = null;
+        SearchOrders();
+    }
+
+    private void SearchOrderLines(OrderHeader order)
+    {
+        filteredOrderLines = OrderService.GetOrderLines(order.Id)
+            .Where(ol => string.IsNullOrEmpty(productCodeSearchTerm) || ol.ProductCode?.Contains(productCodeSearchTerm, StringComparison.OrdinalIgnoreCase) == true)
+            .ToList() ?? new List<OrderLine>();
+    }
+
+    private void ClearProductCodeSearch(OrderHeader order)
+    {
+        productCodeSearchTerm = "";
+        SearchOrderLines(order);
+    }
+}

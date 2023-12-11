@@ -1,0 +1,175 @@
+﻿@page "/createorder/{orderId?}"
+@using OrderManagementSystem.Services
+@using OrderManagementSystem.Models
+@inject OrderService OrderService
+@inject NavigationManager NavigationManager
+@inject Microsoft.JSInterop.IJSRuntime JSRuntime
+<link rel="stylesheet" href="css/bootstrap.css" />
+
+<h3>Create Order</h3>
+
+<div class="row">
+    <div class="col-md-6">
+        <EditForm Model="newOrder" OnValidSubmit="SaveOrder">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="mb-3">
+                <label for="OrderNumber" class="form-label">Order Number:</label>
+                <InputText id="OrderNumber" @bind-Value="@newOrder.OrderNumber" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label for="OrderType" class="form-label">Order Type:</label>
+                <select id="OrderType" @bind="@newOrder.OrderType" class="form-select">
+                    <option value="Normal">Normal</option>
+                    <option value="Staff">Staff</option>
+                    <option value="Mechanical">Mechanical</option>
+                    <option value="Perishable">Perishable</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="OrderStatus" class="form-label">Order Status:</label>
+                <select id="OrderStatus" @bind="@newOrder.OrderStatus" class="form-select">
+                    <option value="New">New</option>
+                    <option value="Processing">Processing</option>
+                    <option value="Complete">Complete</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="CustomerName" class="form-label">Customer Name:</label>
+                <InputText id="CustomerName" @bind-Value="@newOrder.CustomerName" class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label for="CreateDate" class="form-label">Create Date and Time:</label>
+                <InputDate id="CreateDate" @bind-Value="@newOrder.CreateDate" class="form-control" />
+            </div>
+
+            <!-- Order Lines Section -->
+            <h4>Order Lines</h4>
+
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Line Number</th>
+                        <th>Product Code</th>
+                        <th>Product Type</th>
+                        <th>Product Cost Price</th>
+                        <th>Product Sales Price</th>
+                        <th>Quantity</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (newOrder.OrderLines != null)
+                    {
+                        @foreach (var orderLine in newOrder.OrderLines)
+                        {
+                            <tr>
+                                <td>@orderLine.LineNumber</td>
+                                <td><InputText @bind-Value="@orderLine.ProductCode" class="form-control" /></td>
+                                <td>
+                                    <select @bind="@orderLine.ProductType" class="form-select">
+                                        <option value="Apparel">Apparel</option>
+                                        <option value="Parts">Parts</option>
+                                        <option value="Equipment">Equipment</option>
+                                        <option value="Motor">Motor</option>
+                                    </select>
+                                </td>
+                                <td><InputNumber @bind-Value="@orderLine.CostPrice" class="form-control" /></td>
+                                <td><InputNumber @bind-Value="@orderLine.SalesPrice" class="form-control" /></td>
+                                <td><InputNumber @bind-Value="@orderLine.Quantity" class="form-control" /></td>
+                                <td>
+                                    <button @onclick="() => RemoveOrderLine(orderLine)" class="btn btn-danger btn-sm">Remove</button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+
+            <button type="button" @onclick="AddOrderLine" class="btn btn-primary">Add Order Line</button>
+
+            <button type="submit" class="btn btn-success">Save Order</button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+   
+    private OrderHeader newOrder = new OrderHeader();
+
+    [Parameter]
+    public string? orderId { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (!string.IsNullOrEmpty(orderId) && int.TryParse(orderId, out int id))
+        {
+          
+            newOrder = OrderService.GetOrderHeaderById(id);
+        }
+        else
+        {
+         
+            newOrder.OrderType = "Normal"; 
+            newOrder.OrderStatus = "New"; 
+        }
+    }
+
+    private void SaveOrder()
+    {
+        if (!string.IsNullOrEmpty(orderId))
+        {
+            OrderService.UpdateOrderHeader(newOrder);
+        }
+        else
+        {
+            if (newOrder.OrderLines != null && newOrder.OrderLines.Any())
+            {
+                OrderService.AddOrderHeader(newOrder);
+            }
+            else
+            {
+                Console.WriteLine("Error: Cannot save order without order lines.");
+            }
+        }
+
+        NavigationManager.NavigateTo("/");
+    }
+
+    private void AddOrderLine()
+    {
+        if (newOrder.OrderLines == null)
+        {
+            newOrder.OrderLines = new List<OrderLine>();
+        }
+
+        var newLine = new OrderLine
+            {
+                LineNumber = newOrder.OrderLines.Count + 1,
+                ProductType = "Apparel",
+                ProductCode = "",
+                CostPrice = 0m,
+                SalesPrice = 0m,
+                Quantity = 0,
+                OrderHeaderId = newOrder.Id
+            };
+
+        newOrder.OrderLines.Add(newLine);
+    }
+
+    private void RemoveOrderLine(OrderLine orderLine)
+    {
+        if (newOrder.OrderLines == null)
+        {
+            newOrder.OrderLines = new List<OrderLine>();
+        }
+
+        newOrder.OrderLines.Remove(orderLine);
+    }
+
+    private void OnValidSubmit()
+    {
+        Console.WriteLine("OnValidSubmit() called");
+    }
+}
